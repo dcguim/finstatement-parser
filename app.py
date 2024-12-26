@@ -69,8 +69,8 @@ async def process_file_endpoint(
     return {"result": result}
 
 # I would like to define an endpoint here that returns whether the fields are expenses or earnings
-@app.get("/retrieve_earnings_expenses_classification")
-async def retrieve_earnings_expenses_classification(
+@app.get("/retrieve_field_type_classification")
+async def retrieve_field_type_classification(
         type_of_statement: str,
         document_name:str):
     if type_of_statement == 'income':
@@ -102,43 +102,67 @@ async def retrieve_earnings_expenses_classification(
             return {"result": type_fin_items}
 
 @app.get("/retrieve_fields_classification")
-async def retrieve_fields_classification(
+async def retrieve_field_classification(
         type_of_statement: str,
         document_name:str):
-    provided_expense_items = []
-    provided_earning_items = []
-    known_asset_items = []
-    known_liability_items = []
-    known_equity_items = []
     if type_of_statement == 'income':
         type_stmnt_path=f"files/input/income-rep/type_{document_name}.json"
         known_fields = misc.retrieve_income_rep_fields()
     elif type_of_statement == 'balance':
         type_stmnt_path=f"files/input/balance-rep/type_{document_name}.json"
         known_fields = misc.retrieve_balance_rep_fields()
+    print(type_stmnt_path)
+    print(known_fields)
     with open(type_stmnt_path,"r") as readfile:
         types_items = json.load(readfile)
-        provided_asset_items = misc.filter_keys_by_category(types_items, 'asset')
-        provided_liability_items = misc.filter_keys_by_category(types_items, 'liability')
-        provided_equity_items = misc.filter_keys_by_category(types_items, 'equity')
-        for item, desc in known_fields.items():
-            if desc['fin_type'] == 'asset':
-                known_asset_items.append((item, desc['description']))
-            elif desc['fin_type'] == 'liability':
-                known_liability_items.append((item, desc['description']))
-            elif desc['fin_type'] == 'equity':
-                known_equity_items.append((item, desc['description']))
-        jsonparser = JsonOutputParser()
-        index_year_stmnt_prompt = ChatPromptTemplate.from_messages([
-            ("system", prt.classify_fields_unknown_to_known_prompt)])
-        chain = index_year_stmnt_prompt | model | jsonparser
-        asset_mapping_res = chain.invoke({"unknown_financial_terms": provided_asset_items,
-                                            "known_financial_items": known_asset_items})
-        liability_mapping_res = chain.invoke({"unknown_financial_terms": provided_liability_items,
-                                            "known_financial_items": known_liability_items})
-        equity_mapping_res = chain.invoke({"unknown_financial_terms": provided_equity_items,
-                                            "known_financial_items": known_equity_items})
-        return {"result": {
-            'asset_mapping': asset_mapping_res,
-            'liability_mapping': liability_mapping_res,
-            'equity_mapping': equity_mapping_res}}
+        print(types_items)
+        if type_of_statement == 'income':
+            known_expense_items = []
+            known_earning_items = []
+            provided_expense_items = misc.filter_keys_by_category(types_items, 'expenses')
+            provided_earnings_items = misc.filter_keys_by_category(types_items, 'earnings')
+            income_fields = misc.retrieve_income_rep_fields()
+            for item, desc in income_fields.items():
+                if desc['fin_type'] == 'expense':
+                    known_expense_items.append((item, desc['description']))
+                elif desc['fin_type'] == 'earning':
+                    known_earning_items.append((item, desc['description']))
+            jsonparser = JsonOutputParser()
+            index_year_stmnt_prompt = ChatPromptTemplate.from_messages([
+                ("system", prt.classify_fields_unknown_to_known_prompt)])
+            chain = index_year_stmnt_prompt | model | jsonparser
+            expense_mapping_res = chain.invoke({"unknown_financial_terms": provided_expense_items,
+                                                "known_financial_items": known_expense_items})
+            earning_mapping_res = chain.invoke({"unknown_financial_terms": provided_earnings_items,
+                                                "known_financial_items": known_earning_items})
+            return {"result": {
+                'expenses_mapping': expense_mapping_res,
+                'earnings_mapping': earning_mapping_res}}
+        elif type_of_statement == 'balance':
+            known_asset_items = []
+            known_liability_items = []
+            known_equity_items = []
+            provided_asset_items = misc.filter_keys_by_category(types_items, 'asset')
+            provided_liability_items = misc.filter_keys_by_category(types_items, 'liability')
+            provided_equity_items = misc.filter_keys_by_category(types_items, 'equity')
+            for item, desc in known_fields.items():
+                if desc['fin_type'] == 'asset':
+                    known_asset_items.append((item, desc['description']))
+                elif desc['fin_type'] == 'liability':
+                    known_liability_items.append((item, desc['description']))
+                elif desc['fin_type'] == 'equity':
+                    known_equity_items.append((item, desc['description']))
+            jsonparser = JsonOutputParser()
+            unknown_to_known_prompt = ChatPromptTemplate.from_messages([
+                ("system", prt.classify_fields_unknown_to_known_prompt)])
+            chain = unknown_to_known_prompt | model | jsonparser
+            asset_mapping_res = chain.invoke({"unknown_financial_terms": provided_asset_items,
+                                                "known_financial_items": known_asset_items})
+            liability_mapping_res = chain.invoke({"unknown_financial_terms": provided_liability_items,
+                                                "known_financial_items": known_liability_items})
+            equity_mapping_res = chain.invoke({"unknown_financial_terms": provided_equity_items,
+                                                "known_financial_items": known_equity_items})
+            return {"result": {
+                'asset_mapping': asset_mapping_res,
+                'liability_mapping': liability_mapping_res,
+                'equity_mapping': equity_mapping_res}}
