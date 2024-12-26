@@ -4,12 +4,12 @@ Transform the the financial statement between triple backticks in JSON format. I
     ```{financial_statement}``
 
 1. Consider only the "Body" key of the input json and create a list of jsons where the year is the key.
-2. For each year key, the output should be a json object with the name financial item name as key, and the correspondent number amount as value. The values should always be a number with it's respective sign. Try to deduce if the value if positive or negative and assign the correct sign.
+2. For each year key, the output should be a json object with the name financial item name as key, and the correspondent number amount as value. The year should be an integer value like 1998, 202', or 2000. The values should always be a number with it's respective sign. Try to deduce if the value if positive or negative and assign the correct sign.
 3. If it's not possible to assign a number assign the json null value. 
 4. Return nothing but a json containing a list of jsons with every year present in the body as a key. Ensure that all the years within the body section are present and contain the JSON value as described in steps 1 and 2.
 """
 
-classify_amount_type_prompt = """
+classify_income_type_prompt = """
 Transform the the financial statement between triple backticks in JSON format. If the financial statement input is not a JSON, respond with: "Please provide a JSON input!"
 
     ```{financial_statement}``
@@ -19,6 +19,18 @@ Transform the the financial statement between triple backticks in JSON format. I
 2. Return should be ONLY a list of JSON objects. Each object should contain a single pair consisting of the  item's name, and either "earnings" or  "expenses". 
 3. Try to classify all of the financial items! If it is absolutely not possible to classify the key assign the json "null" value.
 """
+
+classify_balance_type_prompt = """
+Transform the the financial statement between triple backticks in JSON format. If the financial statement input is not a JSON, respond with: "Please provide a JSON input!"
+
+    ```{financial_statement}``
+
+
+1. For each different item classify if it is an asset, liability, or equity, using firstly the meaning, the sign if available, and the items before and after.
+2. Return should be ONLY a list of JSON objects. Each object should contain a single pair consisting of the  item's name, and either "asset",  or  "expenses". 
+3. Try to classify all of the financial items! If it is absolutely not possible to classify the key assign the json "null" value.
+"""
+
 
 classify_fields_unknown_to_known_prompt = """
     Classify the unknown financial terms listed between triple ticks to the known financial description items listed between triple asterisks.

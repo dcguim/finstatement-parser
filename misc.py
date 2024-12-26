@@ -1,4 +1,5 @@
 import income_rep_model as im
+import balance_rep_model as bm
 import netrc
 import os
 
@@ -38,6 +39,22 @@ def retrieve_income_rep_fields():
                                         'fin_type': fin_type}
     print(st_income_fields)
     return st_income_fields
+
+def retrieve_balance_rep_fields():
+    print('enter retrieve_balance_rep')
+    # create a dict with the field and it's description
+    st_balance_fields = {}
+    fields = bm.CurrentAssets.__fields__ | bm.LongTermAssets.__fields__ | bm.CurrentLiabilities.__fields__ | bm.LongTermLiabilities.__fields__ | bm.Equity.__fields__ | bm.BalanceStatement.__fields__
+    for field_name, field_info in fields.items():
+        field_info = field_info
+        description = field_info.description if field_info.description else 'No description'
+        field_schema_extra = field_info.json_schema_extra or {}
+        if not field_schema_extra:
+            continue
+        fin_type = field_schema_extra.get('fin_type', 'Not specified')
+        st_balance_fields[field_name] = {'description': description,
+                                         'fin_type': fin_type}
+    return st_balance_fields
 
 
 def downcase_keys(obj):

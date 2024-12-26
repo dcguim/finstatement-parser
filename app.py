@@ -48,69 +48,97 @@ async def process_file(file_path: str, model, output_dir, custom_system_prompt =
 # Create a FastAPI route for the process_file function
 @app.get("/process-file")
 async def process_file_endpoint(
-    file_path: str = Query(..., description="Path to the PDF file"),
-    select_pages : Optional[List[int]] = Query(None, description="List of page numbers to process")
-):
+        type_of_statement: str,
+        file_path: str = Query(..., description="Path to the PDF file"),
+        select_pages : Optional[List[int]] = Query(None, description="List of page numbers to process")):
     """
     FastAPI endpoint to process a PDF file and return markdown content.
     """
+    if type_of_statement == 'income':
+        output_dir="files/output/income-rep/"
+    elif type_of_statement == 'balance':
+        output_dir="files/output/balance-rep/"
+    vision_model = "gpt-4o"
     result = await process_file(
         file_path=file_path,
-        model=model,
-        output_dir="files/input/income-rep/",
+        model=vision_model,
+        output_dir=output_dir,
         custom_system_prompt=prt.pdf2json_omniai_prompt,
         select_pages=select_pages,
     )
-    print(result)
     return {"result": result}
 
 # I would like to define an endpoint here that returns whether the fields are expenses or earnings
 @app.get("/retrieve_earnings_expenses_classification")
-async def retrieve_earnings_expenses_classification():
+async def retrieve_earnings_expenses_classification(
+        type_of_statement: str,
+        document_name:str):
+    if type_of_statement == 'income':
+        raw_stmnt_path=f"files/input/income-rep/{document_name}.md"
+        clean_stmnt_path=f"files/input/income-rep/clean_{document_name}.json"
+        type_stmnt_path=f"files/input/income-rep/type_{document_name}.json"
+        type_field_prompt = prt.classify_income_type_prompt
+    elif type_of_statement == 'balance':
+        raw_stmnt_path=f"files/input/balance-rep/{document_name}.md"
+        clean_stmnt_path=f"files/input/balance-rep/clean_{document_name}.json"
+        type_stmnt_path=f"files/input/balance-rep/type_{document_name}.json"
+        type_field_prompt = prt.classify_balance_type_prompt
     jsonparser = JsonOutputParser()
     index_year_stmnt_prompt = ChatPromptTemplate.from_messages([
         ("system", prt.index_year_stmnt_prompt)])
-    income_stmt_path = 'files/input/income-rep/leighs_statement.json'
-    with open(income_stmt_path, "r") as f:
+    with open(raw_stmnt_path, "r") as f:
         chain = index_year_stmnt_prompt | model | jsonparser
         statement= json.load(f)
         json_stmnt = chain.invoke({"financial_statement": statement})
-        with open(f'files/input/income-rep/clean_leighs_statement.json',"w") as writefile:
+        with open(clean_stmnt_path, "w") as writefile:
             downcased_stmnt = misc.downcase_keys(json_stmnt)
             json.dump(downcased_stmnt, writefile, indent=4)
             classify_amount_type_prompt = ChatPromptTemplate.from_messages([
-                ("system", prt.classify_amount_type_prompt)])
+                ("system", type_field_prompt)])
             chain = classify_amount_type_prompt | model | jsonparser
             type_fin_items = chain.invoke({"financial_statement": downcased_stmnt})
-            with open(f'files/input/income-rep/type_leighs_statement.json',"w") as writefile:
+            with open(type_stmnt_path, "w") as writefile:
                 json.dump(type_fin_items, writefile, indent=4)
             return {"result": type_fin_items}
 
 @app.get("/retrieve_fields_classification")
-async def retrieve_fields_classification():
+async def retrieve_fields_classification(
+        type_of_statement: str,
+        document_name:str):
     provided_expense_items = []
     provided_earning_items = []
-    provided_undefined_items = []
-    known_expense_items = []
-    known_earning_items = []
-    with open(f'files/input/income-rep/type_leighs_statement.json',"r") as readfile:
+    known_asset_items = []
+    known_liability_items = []
+    known_equity_items = []
+    if type_of_statement == 'income':
+        type_stmnt_path=f"files/input/income-rep/type_{document_name}.json"
+        known_fields = misc.retrieve_income_rep_fields()
+    elif type_of_statement == 'balance':
+        type_stmnt_path=f"files/input/balance-rep/type_{document_name}.json"
+        known_fields = misc.retrieve_balance_rep_fields()
+    with open(type_stmnt_path,"r") as readfile:
         types_items = json.load(readfile)
-        provided_expense_items = misc.filter_keys_by_category(types_items, 'expenses')
-        provided_earnings_items = misc.filter_keys_by_category(types_items, 'earnings')
-        income_fields = misc.retrieve_income_rep_fields()
-        for item, desc in income_fields.items():
-            if desc['fin_type'] == 'expense':
-                known_expense_items.append((item, desc['description']))
-            elif desc['fin_type'] == 'earning':
-                known_earning_items.append((item, desc['description']))
+        provided_asset_items = misc.filter_keys_by_category(types_items, 'asset')
+        provided_liability_items = misc.filter_keys_by_category(types_items, 'liability')
+        provided_equity_items = misc.filter_keys_by_category(types_items, 'equity')
+        for item, desc in known_fields.items():
+            if desc['fin_type'] == 'asset':
+                known_asset_items.append((item, desc['description']))
+            elif desc['fin_type'] == 'liability':
+                known_liability_items.append((item, desc['description']))
+            elif desc['fin_type'] == 'equity':
+                known_equity_items.append((item, desc['description']))
         jsonparser = JsonOutputParser()
         index_year_stmnt_prompt = ChatPromptTemplate.from_messages([
             ("system", prt.classify_fields_unknown_to_known_prompt)])
         chain = index_year_stmnt_prompt | model | jsonparser
-        expense_mapping_res = chain.invoke({"unknown_financial_terms": provided_expense_items,
-                                            "known_financial_items": known_expense_items})
-        earning_mapping_res = chain.invoke({"unknown_financial_terms": provided_earnings_items,
-                                            "known_financial_items": known_earning_items})
+        asset_mapping_res = chain.invoke({"unknown_financial_terms": provided_asset_items,
+                                            "known_financial_items": known_asset_items})
+        liability_mapping_res = chain.invoke({"unknown_financial_terms": provided_liability_items,
+                                            "known_financial_items": known_liability_items})
+        equity_mapping_res = chain.invoke({"unknown_financial_terms": provided_equity_items,
+                                            "known_financial_items": known_equity_items})
         return {"result": {
-            'expenses_mapping': expense_mapping_res,
-            'earnings_mapping': earning_mapping_res}}
+            'asset_mapping': asset_mapping_res,
+            'liability_mapping': liability_mapping_res,
+            'equity_mapping': equity_mapping_res}}

@@ -6,32 +6,32 @@ class CurrentAssets(BaseModel):
     cash_and_cash_equivalents: Optional[float] = Field(
         0.0,
         description="Assets: Liquid assets including currency, bank balances, and highly liquid investments with maturities of three months or less.",
-        fin_type='assets'
+        fin_type='asset'
     )
     accounts_receivable: Optional[float] = Field(
         0.0,
         description="Assets: Amounts owed to the company by customers for goods or services delivered on credit.",
-        fin_type='assets'
+        fin_type='asset'
     )
     inventory: Optional[float] = Field(
         0.0,
         description="Assets: The value of goods available for sale or raw materials used in production.",
-        fin_type='assets'
+        fin_type='asset'
     )
     prepaid_expenses: Optional[float] = Field(
         0.0,
         description="Assets: Payments made in advance for goods or services to be received in the future.",
-        fin_type='assets'
+        fin_type='asset'
     )
     short_term_investments: Optional[float] = Field(
         0.0,
         description="Assets: Investments intended to be sold or converted into cash within a year.",
-        fin_type='assets'
+        fin_type='asset'
     )
     total_current_assets: float = Field(
         None,
         description="Assets: The total value of all current assets.",
-        fin_type='assets'
+        fin_type='asset'
     )
 
     @root_validator(pre=True)
@@ -51,32 +51,32 @@ class LongTermAssets(BaseModel):
     property_plant_equipment: Optional[float] = Field(
         0.0,
         description="Assets: Tangible fixed assets used in operations, including buildings, machinery, and land.",
-        fin_type='assets'
+        fin_type='asset'
     )
     intangible_assets: Optional[float] = Field(
         0.0,
         description="Assets: Non-physical assets such as patents, trademarks, and goodwill.",
-        fin_type='assets'
+        fin_type='asset'
     )
     long_term_investments: Optional[float] = Field(
         0.0,
         description="Assets: Investments not intended to be sold within the next year, such as stocks, bonds, or real estate.",
-        fin_type='assets'
+        fin_type='asset'
     )
     deferred_tax_assets: Optional[float] = Field(
         0.0,
         description="Assets: Future tax benefits arising from temporary differences between accounting and tax bases.",
-        fin_type='assets'
+        fin_type='asset'
     )
     other_non_current_assets: Optional[float] = Field(
         0.0,
         description="Assets: Any other assets not classified as current or specifically listed, often miscellaneous items.",
-        fin_type='assets'
+        fin_type='asset'
     )
     total_long_term_assets: float = Field(
         None,
         description="Assets: The total value of all long-term assets.",
-        fin_type='assets'
+        fin_type='asset'
     )
 
     @root_validator(pre=True)
@@ -230,7 +230,7 @@ class BalanceStatement(BaseModel):
     total_assets: float = Field(
         None,
         description="Assets: The total assets, calculated as the sum of current and long-term assets.",
-        fin_type='assets'
+        fin_type='asset'
     )
     total_liabilities: float = Field(
         None,
@@ -305,45 +305,6 @@ class BalanceStatement(BaseModel):
         )
         return values
 
-# Equity
-class Equity(BaseModel):
-    common_stock: Optional[float] = Field(
-        0.0,
-        description="Equity: The value of shares issued by the company to shareholders.",
-        fin_type='equity'
-    )
-    retained_earnings: Optional[float] = Field(
-        0.0,
-        description="Equity: Cumulative net income retained for reinvestment in the business rather than distributed as dividends.",
-        fin_type='equity'
-    )
-    additional_paid_in_capital: Optional[float] = Field(
-        0.0,
-        description="Equity: Excess amounts paid by investors over the par value of issued stock.",
-        fin_type='equity'
-    )
-    treasury_stock: Optional[float] = Field(
-        0.0,
-        description="Equity: The value of shares repurchased by the company and held in its treasury.",
-        fin_type='equity'
-    )
-    total_equity: float = Field(
-        None,
-        description="The total value of all equity accounts.",
-        fin_type='equity'
-    )
-
-    @root_validator(pre=True)
-    def ensure_total_equity(cls, values):
-        if values.get('total_equity') is None:
-            values['total_equity'] = (
-                values.get('common_stock', 0) +
-                values.get('retained_earnings', 0) +
-                values.get('additional_paid_in_capital', 0) -
-                values.get('treasury_stock', 0)
-            )
-        return values
-
 class BalanceStatement(BaseModel):
     current_assets: CurrentAssets
     long_term_assets: LongTermAssets
@@ -353,19 +314,18 @@ class BalanceStatement(BaseModel):
 
     total_assets: float = Field(
         None,
-        description="The total assets, calculated as the sum of current and long-term assets."
+        description="The total assets, calculated as the sum of current and long-term assets.",
+        fin_type='asset'
     )
     total_liabilities: float = Field(
         None,
-        description="The total liabilities, calculated as the sum of current and long-term liabilities."
+        description="The total liabilities, calculated as the sum of current and long-term liabilities.",
+        fin_type='liability'
     )
     total_equity: float = Field(
         None,
-        description="The total equity, obtained from the Equity instance."
-    )
-    total_liabilities_and_equity: float = Field(
-        None,
-        description="The total of liabilities and equity, which should match the total assets."
+        description="The total equity, obtained from the Equity instance.",
+        fin_type='liability'
     )
 
     @root_validator(pre=True)
@@ -409,13 +369,6 @@ class BalanceStatement(BaseModel):
         # Ensure previous calculations for total liabilities and equity
         values = cls.ensure_total_liabilities(values)
         values = cls.ensure_total_equity(values)
-
-        # Calculate total liabilities and equity
-        if values.get('total_liabilities_and_equity') is None:
-            values['total_liabilities_and_equity'] = (
-                values['total_liabilities'] +
-                values['total_equity']
-            )
 
         # Check if total assets match total liabilities and equity
         if 'total_assets' not in values:
@@ -573,9 +526,9 @@ if __name__ == '__main__':
           f'  Total Liabilities: {balance_stmt.total_liabilities}\n'
           f'  Total Equity: {balance_stmt.total_equity}\n'
           f'  ===============================\n'
-          f'  Total Liabilities & Equity: {balance_stmt.total_liabilities_and_equity}\n')
+          f'  Total Liabilities & Equity: {balance_stmt.total_liabilities + balance_stmt.total_equity}\n')
 
-    assert balance_stmt.total_assets == balance_stmt.total_liabilities_and_equity, (
+    assert balance_stmt.total_assets == (balance_stmt.total_liabilities + balance_stmt.total_equity), (
         "Total assets do not match total liabilities and equity."
     )
 
