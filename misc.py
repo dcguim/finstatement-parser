@@ -2,12 +2,40 @@ import income_rep_model as im
 import balance_rep_model as bm
 import netrc
 import os
+import statics as st
+import configparser
+import boto3
 
-authinfo_filepath = "~/.authinfo"
+def load_aws_credentials(profile):
+    """
+    Loads AWS credentials and region for a given profile into environment variables.
+    """
+    try:
+        # Load the profile using boto3.Session
+        session = boto3.Session(profile_name=profile)
+
+        # Get credentials and region
+        credentials = session.get_credentials()
+        region = session.region_name
+
+        # Ensure all required fields are present
+        if not credentials or not credentials.access_key or not credentials.secret_key or not region:
+            raise ValueError("Missing AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, " +
+                             "or AWS_DEFAULT_REGION in the credentials file.")
+
+        # Set environment variables
+        os.environ["AWS_ACCESS_KEY_ID"] = credentials.access_key
+        os.environ["AWS_SECRET_ACCESS_KEY"] = credentials.secret_key
+        os.environ["AWS_DEFAULT_REGION"] = region
+
+        print("AWS credentials successfully loaded.")
+        return session
+    except Exception as e:
+        raise RuntimeError(f"An error occurred while loading AWS credentials: {e}")
 
 def get_apikey():
     # Path to the authinfo file (default is ~/.netrc or ~/.authinfo)
-    authinfo_path = os.path.expanduser(authinfo_filepath)
+    authinfo_path = os.path.expanduser(st.AUTHINFO_FILEPATH)
     try:
         # Parse the authinfo file
         credentials = netrc.netrc(authinfo_path)

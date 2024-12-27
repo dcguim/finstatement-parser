@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, File, UploadFile, HTTPException
 from pyzerox import zerox
+from botocore.exceptions import NoCredentialsError, ClientError
 import json
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 import os
 import misc
+import statics as st
 from typing import Optional, List
 import prompts as prt
 from langchain_openai import ChatOpenAI
@@ -12,6 +14,66 @@ from langchain_openai import ChatOpenAI
 os.environ["OPENAI_API_KEY"] = misc.get_apikey()
 model = ChatOpenAI(model='gpt-4', temperature=0)
 app = FastAPI()
+
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Configure AWS S3
+
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...)):
+    """
+    Endpoint to upload a file to S3.
+    :param file: The uploaded file from the client
+    """
+    session = misc.load_aws_credentials(st.PROFILE)
+    s3_client = session.client("s3")
+    print(session.profile_name)  # Should print 'ddtechu'
+    try:
+        # Read file content
+        file_content = await file.read()
+        # Upload the file to S3
+        s3_client.put_object(
+            Bucket=st.S3_BUCKET_NAME,
+            Key=file.filename,
+            Body=file_content,
+            ContentType=file.content_type  # Set the correct content type (e.g., application/pdf)
+        )
+
+        return {
+            "message": f"File '{file.filename}' uploaded successfully to bucket '{st.S3_BUCKET_NAME}'",
+            "file_url": f"https://{st.S3_BUCKET_NAME}.s3.amazonaws.com/{file.filename}",
+        }
+    except NoCredentialsError:
+        raise HTTPException(status_code=500, detail="AWS credentials not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/list-s3-buckets")
+async def list_s3_buckets():
+    """
+    Endpoint to list S3 buckets for a given AWS profile.
+    """
+    try:
+        # Load AWS credentials for the profile
+        session = misc.load_aws_credentials(st.PROFILE)
+
+        # Create S3 client using the loaded credentials
+        s3_client = session.client('s3')
+
+        # List buckets
+        # List objects in the bucket
+        response = s3_client.list_objects_v2(Bucket=st.S3_BUCKET_NAME)
+
+        # Extract object keys (blob names)
+        if 'Contents' in response:
+            blobs = [obj['Key'] for obj in response['Contents']]
+        else:
+            blobs = []
+        return {"blobs": blobs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 async def process_file(file_path: str, model, output_dir, custom_system_prompt = None, select_pages = None, **kwargs):
     """
